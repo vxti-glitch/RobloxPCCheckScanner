@@ -1,5 +1,4 @@
-﻿# PCCheckScanner.ps1  |  made by vxti
-# run: Set-ExecutionPolicy Bypass -Scope Process -Force; & ".\PCCheckScanner.ps1"
+
 
 Set-StrictMode -Off
 $ErrorActionPreference = 'SilentlyContinue'
@@ -9,7 +8,7 @@ $Host.UI.RawUI.WindowTitle = 'PC Check Scanner  |  vxti'
 try { $Host.UI.RawUI.BufferSize = [Management.Automation.Host.Size]::new(200, 9999) } catch {}
 try { $Host.UI.RawUI.WindowSize = [Management.Automation.Host.Size]::new(160, 45)  } catch {}
 
-# ---- device path converter (fixes \Device\HarddiskVolume3\... -> C:\...) ---
+
 Add-Type -MemberDefinition @'
 [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
 public static extern uint QueryDosDevice(string lpDeviceName, System.Text.StringBuilder lpTargetPath, int ucchMax);
@@ -27,9 +26,9 @@ try {
 
 function Resolve-Path2([string]$p) {
     if (-not $p) { return $p }
-    # already a normal drive path
+   
     if ($p -match '^[A-Za-z]:\\') { return $p }
-    # device path -- map to drive letter
+   
     if ($p -match '^\\Device\\') {
         foreach ($dev in $script:DeviceMap.Keys) {
             if ($p.StartsWith($dev, [StringComparison]::OrdinalIgnoreCase)) {
@@ -40,20 +39,20 @@ function Resolve-Path2([string]$p) {
     return $p
 }
 
-# ---- crit collector ---------------------------------------------------------
+
 $script:CritList = [Collections.Generic.List[pscustomobject]]::new()
 function Add-Crit([string]$ph, [string]$lbl, [string]$val) {
     $script:CritList.Add([pscustomobject]@{ Phase = $ph; Label = $lbl; Value = $val })
 }
 
-# ---- blacklist --------------------------------------------------------------
+
 $BL  = @('Wave','Velocity','Potassium','Volcano','Xeno','Seliware','Volt','SirHurt',
-         'Solara','Bunni','Synapse','Isaeva','DX9WARE','Photon','MatrixHub','Ronin',
+         'Solara','Bunni','Synapse','isabelle','DX9WARE','Photon','MatrixHub','Ronin',
          'Matcha','Serotonin','Severe','RbxCli','loader','Executor','Injector','Sploit')
 $BLP = ($BL | ForEach-Object { [regex]::Escape($_) }) -join '|'
 function Test-BL([string]$s) { return ($s -match $BLP) }
 
-# ---- signature check (resolves device paths first) -------------------------
+
 function Get-Sig([string]$rawPath) {
     $p = Resolve-Path2 $rawPath
     if (-not $p)                                                      { return 'NoPath'    }
@@ -62,14 +61,14 @@ function Get-Sig([string]$rawPath) {
     catch { return 'Error' }
 }
 
-# ---- colours ----------------------------------------------------------------
+
 $C = @{
     Border='DarkCyan'; Accent='Cyan'; Header='White'
     OK='Green'; Warn='Yellow'; Crit='Red'; Muted='DarkGray'; Dim='Gray'
 }
 
-# ---- layout -----------------------------------------------------------------
-$BW = 155   # box inner width
+
+$BW = 155  
 
 function _b { Write-Host "  +$('=' * $BW)+" -ForegroundColor $C.Border }
 function _e { Write-Host "  +$('=' * $BW)+" -ForegroundColor $C.Border }
@@ -105,7 +104,7 @@ function Write-Sub([string]$t) {
     _t
 }
 
-# data row -- no right border so values never get clipped
+
 function Write-Row([string]$badge, [string]$label, [string]$val, [string]$col = 'Gray', [string]$ph = '') {
     $bt = switch ($badge) {
         'OK'   {'[  OK  ]'}; 'CRIT' {'[ CRIT ]'}; 'WARN' {'[ WARN ]'}
@@ -132,19 +131,15 @@ function Write-Crit([string]$label, [string]$val, [string]$ph = '') {
     if ($ph) { Add-Crit $ph $label $val }
 }
 
-# registry path row
-# - if file is deleted:  show as WARN (yellow) -- not CRIT
-# - if blacklisted:      CRIT (red)
-# - if unsigned:         CRIT (red)
-# - if signed/clean:     OK   (green)
+
 function Clean-RegPath([string]$raw) {
     if (-not $raw) { return $raw }
     $p = $raw.Trim().Trim('"').Trim("'")
-    # strip anything after the exe extension -- arguments, version info, etc.
+   
     if ($p -match '^(.+?\.(?:exe|dll|sys|com|bat|cmd|msi|msp|scr))') {
         $p = $Matches[1]
     }
-    # expand environment variables if present
+  
     $p = [Environment]::ExpandEnvironmentVariables($p)
     return $p.Trim()
 }
@@ -157,22 +152,21 @@ function Write-RegPath([string]$ctx, [string]$rawPath, [string]$ts, [string]$ph 
     $path    = Resolve-Path2 $cleaned
     $bl      = Test-BL $path
 
-    # robust existence check -- try the cleaned path, then the raw resolved path
+
     $exists = $false
     if ($path) {
         $exists = [System.IO.File]::Exists($path)
-        # fallback: Test-Path handles UNC and some edge cases IO.File misses
+       
         if (-not $exists) {
             $exists = (Test-Path -LiteralPath $path -PathType Leaf -EA SilentlyContinue) -eq $true
         }
     }
 
-    # if path looks like a directory or system path that doesn't end in an exe-like
-    # extension, skip silently -- not something we can validate
+  
     if (-not ($path -match '\.[a-zA-Z]{2,4}$')) { return }
 
     if (-not $exists) {
-        # only flag deleted if it's blacklisted -- benign deleted files are noise
+       
         if ($bl) {
             $line = $path
             if ($ts) { $line += "  [KeyMod: $ts]" }
@@ -191,10 +185,10 @@ function Write-RegPath([string]$ctx, [string]$rawPath, [string]$ts, [string]$ph 
         if ($sig -notin @('Valid','Error','')) { $line += "  [UNSIGNED: $sig]" }
         Write-Crit $ctx $line $ph
     }
-    # signed and clean -- silent, no output
+   
 }
 
-# ---- FILETIME bytes to DateTime ---------------------------------------------
+
 function ConvertFrom-RegFT([byte[]]$b) {
     if ($b -and $b.Count -ge 8) {
         try { return [DateTime]::FromFileTime([BitConverter]::ToInt64($b, 0)) }
@@ -209,9 +203,7 @@ function Get-KeyMod([string]$path) {
 }
 
 
-# =============================================================================
-#  BANNER
-# =============================================================================
+
 function Show-Banner {
     Clear-Host
     Write-Host ''
@@ -227,9 +219,7 @@ function Show-Banner {
 Show-Banner
 
 
-# =============================================================================
-#  PHASE 1  --  Environment and Bootstrap
-# =============================================================================
+
 Write-Section '01' 'Environment and Bootstrap'
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
@@ -257,7 +247,7 @@ if ($dn9) {
 
 Write-Sub 'EZTools Download -- AmcacheParser / AppCompatCacheParser / TimelineExplorer / PECmd'
 
-# All tools extract flat into one single folder: Downloads\EZTools
+
 $ezDir = "$env:USERPROFILE\Downloads\EZTools"
 if (-not (Test-Path $ezDir)) { New-Item -ItemType Directory -Path $ezDir -Force | Out-Null }
 
@@ -284,12 +274,12 @@ foreach ($t in $tools.GetEnumerator()) {
 
         Invoke-WebRequest -Uri $t.Value -OutFile $zip -UseBasicParsing -EA Stop
 
-        # extract to a temp subfolder then move everything flat into $ezDir
+      
         if (Test-Path $tmpDir) { Remove-Item $tmpDir -Recurse -Force }
         Expand-Archive -LiteralPath $zip -DestinationPath $tmpDir -Force
         Remove-Item $zip -Force -EA SilentlyContinue
 
-        # move only .exe .dll .json -- skip .layout and other clutter
+      
         $keep = @('.exe','.dll','.json')
         Get-ChildItem $tmpDir -Recurse -File -EA SilentlyContinue |
             Where-Object { $keep -contains $_.Extension.ToLower() } |
@@ -305,12 +295,12 @@ foreach ($t in $tools.GetEnumerator()) {
     }
 }
 
-# clean up any .layout or other non-essential files already in the folder from previous extractions
+
 Get-ChildItem $ezDir -File -EA SilentlyContinue |
     Where-Object { $_.Extension.ToLower() -notin @('.exe','.dll','.json') } |
     ForEach-Object { Remove-Item $_.FullName -Force -EA SilentlyContinue }
 
-# USN.Journal.exe -- direct exe download, no zip
+
 $usnJournalExe = Join-Path $ezDir 'USN.Journal.exe'
 if (-not (Test-Path $usnJournalExe -EA SilentlyContinue)) {
     Write-Row 'INFO' 'USN.Journal' 'Downloading...' $C.Warn
@@ -325,7 +315,7 @@ if (-not (Test-Path $usnJournalExe -EA SilentlyContinue)) {
     Write-Row 'OK' 'USN.Journal' "Present: $usnJournalExe" $C.OK
 }
 
-# resolve exe paths -- all in the same flat folder
+
 $amExe  = Get-ChildItem $ezDir -Filter 'AmcacheParser.exe'        -EA SilentlyContinue | Select-Object -First 1
 $accExe = Get-ChildItem $ezDir -Filter 'AppCompatCacheParser.exe'  -EA SilentlyContinue | Select-Object -First 1
 $tlExe  = Get-ChildItem $ezDir -Filter 'TimelineExplorer.exe'      -EA SilentlyContinue | Select-Object -First 1
@@ -334,15 +324,12 @@ $peExe  = Get-ChildItem $ezDir -Filter 'PECmd.exe'                 -EA SilentlyC
 Write-SectionEnd
 
 
-# =============================================================================
-#  PHASE 2  --  Windows Defender
-# =============================================================================
+
 Write-Section '02' 'Windows Defender -- Threats, Exclusions and AV Status'
 
 Write-Sub 'Defender Real-Time Protection Status'
 
-# 0x800106ba = Defender service (WinDefend) is stopped/disabled
-# Try MpComputerStatus first, fall back to registry and service check
+
 $defLoaded = $false
 try {
     $mpComp    = Get-MpComputerStatus -EA Stop
@@ -364,7 +351,7 @@ if ($defLoaded) {
     Write-Row 'INFO' 'Signature Version'   $mpComp.AntivirusSignatureVersion $C.Dim
     Write-Row 'INFO' 'Sig Last Updated'    "$($mpComp.AntivirusSignatureLastUpdated)" $C.Dim
 } else {
-    # service not running -- check registry directly
+
     $defSvc = Get-Service WinDefend -EA SilentlyContinue
     $defReg = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Defender' -EA SilentlyContinue
     $rtpReg = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Defender\Real-Time Protection' -EA SilentlyContinue).DisableRealtimeMonitoring
@@ -482,9 +469,7 @@ if ($threatHits -eq 0) { Write-Row 'OK' 'Defender Threat History' 'No threat eve
 Write-SectionEnd
 
 
-# =============================================================================
-#  PHASE 3  --  Service Status and Tamper Detection
-# =============================================================================
+
 Write-Section '03' 'Service Status and Tamper Detection'
 
 Write-Sub 'Critical Service Health'
@@ -513,9 +498,7 @@ foreach ($name in $svcs.Keys) {
 Write-SectionEnd
 
 
-# =============================================================================
-#  PHASE 4  --  File and Disk Forensics
-# =============================================================================
+
 Write-Section '04' 'File and Disk Forensics'
 
 Write-Sub 'USN Journal -- Integrity Check'
@@ -529,9 +512,7 @@ if ("$usnQuery" -match 'Invalid|No journal|error') {
 Write-SectionEnd
 
 
-# =============================================================================
-#  PHASE 5  --  Hyper-V and VM Environment Check
-# =============================================================================
+
 Write-Section '05' 'Hyper-V and VM Environment Check'
 
 $vmScore = 0
@@ -613,9 +594,7 @@ if ($vmScore -gt 0) {
 Write-SectionEnd
 
 
-# =============================================================================
-#  PHASE 6  --  Amcache and AppCompatCache
-# =============================================================================
+
 Write-Section '06' 'EZTools -- AmcacheParser and AppCompatCacheParser'
 
 $amHve = 'C:\Windows\appcompat\Programs\Amcache.hve'
@@ -624,7 +603,7 @@ Write-Sub 'AmcacheParser'
 if ($amExe) {
     Write-Row 'INFO' 'AmcacheParser' "Running -- please wait..." $C.Accent
 
-    # exactly: cd /d <ezDir>  then  AmcacheParser.exe -f <hive> --csv .
+    
     $amOut = "$env:TEMP\_am_out.tmp"
     $amErr = "$env:TEMP\_am_err.tmp"
     $amProc = Start-Process -FilePath $amExe.FullName `
@@ -668,7 +647,7 @@ Write-Sub 'AppCompatCacheParser (ShimCache)'
 if ($accExe) {
     Write-Row 'INFO' 'AppCompatCacheParser' "Running -- please wait..." $C.Accent
 
-    # exactly: cd /d <ezDir>  then  AppCompatCacheParser.exe --csv .
+
     $accOut = "$env:TEMP\_acc_out.tmp"
     $accErr = "$env:TEMP\_acc_err.tmp"
     $accProc = Start-Process -FilePath $accExe.FullName `
@@ -711,9 +690,7 @@ if ($tlExe) { Write-Row 'INFO' 'TimelineExplorer' "Open CSVs from $ezDir in $($t
 Write-SectionEnd
 
 
-# =============================================================================
-#  PHASE 7  --  Registry Execution Logs
-# =============================================================================
+
 Write-Section '07' 'Registry Execution Logs'
 
 Write-Sub 'AppCompatFlags -- Store'
@@ -799,12 +776,7 @@ if ($rmru) {
 Write-SectionEnd
 
 
-# =============================================================================
-#  PHASE 8  --  Prefetch Analysis
-#  Builds a one-time exe name->path lookup map across common dirs for speed.
-#  Only flags: blacklisted names, or unsigned exes that are still on disk.
-#  Deleted + non-blacklisted entries are silently skipped.
-# =============================================================================
+
 Write-Section '08' 'Prefetch Analysis -- Unsigned and Blacklist'
 
 $pfDir = 'C:\Windows\Prefetch'
@@ -813,8 +785,7 @@ if (Test-Path $pfDir -EA SilentlyContinue) {
     $pfFiles = Get-ChildItem $pfDir -Filter '*.pf' -EA SilentlyContinue
     Write-Row 'INFO' 'Prefetch Files Found' "$($pfFiles.Count) .pf files in $pfDir" $C.Dim
 
-    # build a flat name->fullpath map once across all relevant dirs
-    # much faster than searching per-file with recurse
+
     Write-Row 'INFO' 'Prefetch Lookup' 'Building exe index -- this takes a few seconds...' $C.Muted
 
     $exeIndex  = @{}
@@ -839,11 +810,11 @@ if (Test-Path $pfDir -EA SilentlyContinue) {
         $bl      = Test-BL $pf.Name
         $lastRun = $pf.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
 
-        # O(1) lookup from the index
+      
         $exePath = $exeIndex[$exeName.ToLower()]
 
         if (-not $exePath) {
-            # exe not on disk -- only flag if blacklisted
+           
             if ($bl) {
                 $pfFlagged++
                 Write-Crit "Prefetch: $($pf.Name)" "Last Run: $lastRun  |  EXE: DELETED  |  BLACKLISTED" '08'
@@ -851,7 +822,7 @@ if (Test-Path $pfDir -EA SilentlyContinue) {
             continue
         }
 
-        # exe exists -- check sig and blacklist
+      
         $sig      = Get-Sig $exePath
         $unsigned = $sig -notin @('Valid','Error','')
 
@@ -870,8 +841,7 @@ if (Test-Path $pfDir -EA SilentlyContinue) {
 }
 
 Write-Sub 'PECmd -- Full Prefetch Parse (Embedded File Paths)'
-# PECmd reads the compressed PF binary and extracts the actual file paths
-# that were loaded when the exe ran -- far more forensic detail than just the PF name
+
 if ($peExe) {
     $pfCsvDir = "$ezDir\PECmd_output"
     if (-not (Test-Path $pfCsvDir)) { New-Item -ItemType Directory -Path $pfCsvDir -Force | Out-Null }
@@ -913,9 +883,7 @@ if ($peExe) {
 Write-SectionEnd
 
 
-# =============================================================================
-#  PHASE 9  --  Process Scan, USB History and PowerShell History
-# =============================================================================
+
 Write-Section '09' 'Process Scan, USB History and PowerShell History'
 
 Write-Sub 'Running Processes -- Blacklist Check'
@@ -938,8 +906,8 @@ foreach ($proc in ($procs | Select-Object -First 80)) {
     try { $mods = $proc.Modules } catch {}
     if (-not $mods) { continue }
     $mods | Where-Object {
-        # match blacklist against filename only (not full path) to avoid
-        # false positives from Windows system app folder names e.g. Photon_cw5n1h2
+       
+      
         $fn = [IO.Path]::GetFileNameWithoutExtension($_.FileName)
         (Test-BL $fn) -and ($_.FileName -notmatch '^C:\\Windows\\')
     } | ForEach-Object {
@@ -951,8 +919,8 @@ foreach ($proc in ($procs | Select-Object -First 80)) {
 if ($modHitCount -eq 0) { Write-Row 'OK' 'Loaded Modules' 'No blacklisted DLLs found' $C.OK }
 
 Write-Sub 'USB History -- All Connected Devices'
-# reads USBSTOR for all ever-connected USB storage devices including disconnected ones
-# uses key LastWriteTime as timestamp -- far more reliable than property GUIDs
+
+
 $usbCount = 0
 $usbBases = @(
     'HKLM:\SYSTEM\CurrentControlSet\Enum\USBSTOR',
@@ -973,15 +941,15 @@ foreach ($usbBase in $usbBases) {
             $props     = Get-ItemProperty $inst.PSPath -EA SilentlyContinue
             $friendly  = $props.FriendlyName
             if (-not $friendly) {
-                # parse from device class name: Disk&Ven_SanDisk&Prod_Ultra&Rev_1.00
+                
                 $friendly = ($devType.PSChildName -replace '^Disk&','') -replace '&Rev_[^&]+$',''
                 $friendly = $friendly -replace 'Ven_','' -replace 'Prod_',' '
             }
 
-            # key timestamps -- most reliable approach
+        
             $lastWrite = $inst.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
 
-            # check parent device for manufacturer
+           
             $mfr = $props.Mfg
             if (-not $mfr) { $mfr = '' }
 
@@ -1041,11 +1009,7 @@ Write-SectionEnd
 
 
 
-# =============================================================================
-#  PHASE 10  --  UserAssist  (GUI Program Execution History)
-#  Values are ROT13-encoded paths with run count + FILETIME last-run timestamp.
-#  One of the most reliable artefacts for proving something was double-clicked.
-# =============================================================================
+
 Write-Section '10' 'UserAssist -- GUI Execution History'
 
 function Invoke-ROT13([string]$str) {
@@ -1110,11 +1074,7 @@ if (Test-Path $uaBase -EA SilentlyContinue) {
 Write-SectionEnd
 
 
-# =============================================================================
-#  PHASE 11  --  Installed Programs
-#  Checks HKLM + HKCU uninstall registry keys against the blacklist.
-#  Executors show up here even after being removed.
-# =============================================================================
+
 Write-Section '11' 'Installed Programs -- Blacklist Check'
 
 $instHits = 0
@@ -1153,12 +1113,6 @@ Write-Row 'INFO' 'Programs Scanned' "$($instSeen.Count) unique entries checked a
 Write-SectionEnd
 
 
-# =============================================================================
-#  PHASE 12  --  Kernel Driver Audit
-#  Uses fltMC (built-in Filter Manager tool) and driverquery (built-in).
-#  No external driver or tool required.
-#  Flags unsigned drivers loaded from outside C:\Windows and any BL matches.
-# =============================================================================
 Write-Section '12' 'Kernel Driver Audit -- Unsigned and Blacklisted Drivers'
 
 Write-Sub 'Filter Manager Minifilters  (fltMC)'
@@ -1234,9 +1188,7 @@ if ($dqRaw) {
 
 Write-SectionEnd
 
-# =============================================================================
-#  PHASE 13  --  Critical Findings Summary
-# =============================================================================
+
 Write-Host ''
 Write-Host "  +$('=' * $BW)+" -ForegroundColor $C.Crit
 $hdrTxt = "  13  --  CRITICAL FINDINGS SUMMARY  |  made by vxti"
@@ -1276,36 +1228,9 @@ Write-Host "  +$('=' * $BW)+" -ForegroundColor $C.Crit
 Write-Host ''
 
 
-# ---- cleanup ----------------------------------------------------------------
+
 Set-Location $env:TEMP
 Remove-Item "$ezDir\csv_out" -Recurse -Force -EA SilentlyContinue
 
 
-# =============================================================================
-#  BENEFICIAL MODULES -- future additions go below
-# =============================================================================
 
-# MODULE: Discord Token Scanner
-#   Scan %APPDATA%\discord\Local Storage\leveldb for token strings.
-
-# MODULE: Scheduled Task Audit
-#   Get-ScheduledTask | Where { $_.TaskPath -notmatch 'Microsoft' }
-#   Flag tasks pointing to blacklisted or unsigned binaries.
-
-# MODULE: Startup Persistence
-#   HKCU/HKLM Run + RunOnce + shell:startup folder.
-#   Flag unsigned or unknown entries.
-
-# MODULE: PECmd Integration (Eric Zimmerman)
-#   https://download.ericzimmermanstools.com/net9/PECmd.zip
-#   Properly parses PF binary to extract full embedded file paths.
-#   More accurate than the filesystem-search approach used in Phase 8.
-
-# MODULE: Loaded Driver Audit
-#   fltMC filters + driverquery -- flag unsigned kernel drivers.
-
-# MODULE: Clipboard History
-#   Get-WinEvent -LogName 'Microsoft-Windows-Clipboard/Operational'
-#   Flag base64 blobs or download URLs.
-
-# =============================================================================
