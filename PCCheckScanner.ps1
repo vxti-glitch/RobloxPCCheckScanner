@@ -48,7 +48,7 @@ function Add-Crit([string]$ph, [string]$lbl, [string]$val) {
 
 $BL  = @('Wave','Velocity','Potassium','Volcano','Xeno','Seliware','Volt','SirHurt',
          'Solara','Bunni','Synapse','isabelle','DX9WARE','Photon','MatrixHub','Ronin',
-         'Matcha','Serotonin','Severe','RbxCli','loader','Executor','Injector','Sploit')
+         'Matcha','Serotonin','Severe','RbxCli','loader','Executor','Injector','Sploit','autoexc','workspace')
 $BLP = ($BL | ForEach-Object { [regex]::Escape($_) }) -join '|'
 function Test-BL([string]$s) { return ($s -match $BLP) }
 
